@@ -1,0 +1,48 @@
+.app {
+	box-shadow: rgb(0, 0, 0, 0.4) 0 3px 8px;
+	margin: 100px auto;
+	max-width: 500px;
+	padding: 16px;
+	font-size: 24px;
+}
+
+.display {
+	border: 1px solid black;
+	margin-bottom: 16px;
+	padding: 8px 16px;
+	text-align: right;
+}
+
+.controls {
+	display: grid;
+	grid-template-columns: auto auto auto auto;
+	gap: 16px;
+}
+
+.control0 {
+	grid-column-start: 1;
+	grid-column-end: 4;
+}
+
+.control-eq {
+	grid-column-start: 4;
+	grid-column-end: 5;
+	grid-row-start: 4;
+	grid-row-end: 6;
+}
+
+.button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	box-shadow: rgb(0 0 0 / 40%) 0px 1px 2px;
+	cursor: pointer;
+	text-align: center;
+
+	transition: scale 0.3s;
+}
+
+.button:active {
+	transform: scale(1.048);
+}
