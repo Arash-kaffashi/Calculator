@@ -80,7 +80,7 @@ class Formula {
 		let { command, value } = CMD;
 		// CHECK RESTRICTIONS
 		if (this.lastInput) {
-			let { unallowed, replace, handle } = Formula.RESTRICTIONS(this.lastInput);
+			let { unallowed, handle } = Formula.RESTRICTIONS(this.lastInput);
 
 			if (unallowed.includes(command)) {
 				// RETURNS
