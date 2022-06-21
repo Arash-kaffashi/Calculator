@@ -1,0 +1,7 @@
+• Revisar o código
+• Ativar atalhos
+• Realizar novos testes
+
+
+• Colocar um checkbox para resolver tudo de uma vez
+• Adicionar o sinal de +/-

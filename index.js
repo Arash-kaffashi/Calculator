@@ -9,22 +9,19 @@ const operate = ([a, operator, b]) => {
 	return operations[operator](a, b);
 };
 
+const round = (number) => {
+	return Math.round(number * Math.pow(10, 10)) / Math.pow(10, 10);
+};
+
 const COMMANDS = ["CLEAR", "DIGIT", "DOT", "OPERATOR", "RESULT"];
 
 class Restriction {
-	constructor(
-		{ unallowed = [], replace = [], handle = {} } = {
-			unallowed: [],
-			replace: [],
-			handle: {},
-		}
-	) {
+	constructor(cases) {
 		/* 		this.allowed = COMMANDS.filter(
 			(cmd) => !([...unallowed, ...replace, ...Object.keys(handle)].includes(cmd))
 		); */
-		this.unallowed = unallowed;
-		this.replace = replace;
-		this.handle = handle;
+		this.unallowed = cases?.unallowed ?? [];
+		this.handle = cases?.handle ?? {};
 		return this;
 	}
 }
@@ -38,172 +35,160 @@ class Command {
 }
 
 class Input {
-	constructor(command, value, isDecimal = false) {
-		this.command = command;
+	constructor(group, value) {
+		this.group = group;
 		this.value = value;
-		this.isDecimal = isDecimal;
 		return this;
 	}
 }
 
 class Formula {
-	constructor(display, initialValue = ["DIGIT", "0"]) {
+	constructor(display, initialValue = ["INTEGER", "0"]) {
 		this.display = display;
 		this.initialValue = new Input(...initialValue);
 		this.inputs = [this.initialValue];
 		return this;
 	}
+	get lastInput() {
+		return this.inputs[this.inputs.length - 1];
+	}
 	updateDisplay() {
-		this.display.textContent = this.inputs.reduce(
-			(text, { command, value }) => {
-				switch (command) {
-					case "OPERATOR": // add spaces
-						return `${text} ${value} `;
-						break;
-					case "DOT":
-						console.log("dot");
-					case "DIGIT": // concatenate
-						return text + value;
-						break;
-					case "ERROR":
-					case "RESULT":
-						return value;
-						break;
-					default:
-						throw Error("unespected behavior");
-				}
-			},
-			""
-		);
+		this.display.textContent = this.inputs.reduce((text, { group, value }) => {
+			switch (group) {
+				case "OPERATOR": // add spaces
+					return `${text} ${value} `;
+				case "INTEGER": // concatenate
+				case "FLOAT":
+					return text + value;
+				case "ERROR": // returns the last value
+				case "RESULT":
+					return value;
+				default:
+					throw Error("Unexpected behavior");
+			}
+		}, "");
 	}
 	clear(value) {
 		this.inputs = [value ?? this.initialValue];
 		return this;
 	}
-	get lastInput() {
-		return this.inputs[this.inputs.length - 1];
+	replace(index, input) {
+		this.inputs.splice(index, 1, input);
+		return this;
 	}
-	push({ command, value }) {
+	push(CMD) {
+		let { command, value } = CMD;
+		// CHECK RESTRICTIONS
 		if (this.lastInput) {
 			let { unallowed, replace, handle } = Formula.RESTRICTIONS(this.lastInput);
 
 			if (unallowed.includes(command)) {
+				// RETURNS
 				console.log("unallowed command: ", command);
 				return;
 			}
-			if (replace.includes(command)) {
-				// replaces the last input
-				this.inputs.splice(-1, 1, new Input(command, value));
-				this.updateDisplay();
-				return;
-			}
 			if (command in handle) {
-				this.inputs.push(handle[command]);
+				// CUSTOM HANDLE OF INPUT
+				this.inputs.push(handle[command](this, CMD));
 				this.updateDisplay();
 				return;
 			}
+			// NOT ONE OF THE ABOVE, CONTINUE AS AN ALLOWED CASE
 		}
-
+		// COMMAND AS INPUT TO THE FORMULA
 		switch (command) {
-			case "DOT":
-				this.inputs.splice(
-					-1,
-					1,
-					Object.assign({}, this.lastInput, {
-						value: this.lastInput.value + value,
-						isDecimal: true,
-					})
-				);
-
+			case "DOT": // CONVERT INTEGER TO FLOAT
+				this.replace(-1, new Input("FLOAT", this.lastInput.value + value));
 				break;
-			case "DIGIT":
-				if (this.lastInput?.command == "DIGIT") {
-					this.inputs.splice(
+			case "DIGIT": // ADD OPERAND OR UPDATES WITH THE NEW DIGIT
+				if (["INTEGER", "FLOAT"].includes(this.lastInput.group)) {
+					// REMOVES LAST AND ADD'S A DIGIT
+					this.replace(
 						-1,
-						1,
-						Object.assign({}, this.lastInput, {
-							value: String(Number(this.lastInput.value + value)),
-						})
+						new Input(
+							this.lastInput?.group ?? "INTEGER",
+							Number(this.lastInput.value + value).toString()
+						)
 					);
 				} else {
-					this.inputs.push(
-						new Input(command, value, this.lastInput?.isDecimal)
-					);
+					// ADD OPERAND
+					this.inputs.push(new Input("INTEGER", value));
 				}
 				break;
 			case "OPERATOR":
 			case "RESULT":
 				if (command === "RESULT") {
 					if (this.inputs.length == 2)
+						// COPY LAST INTEGER/FLOAT TO DO THE OPERATION
 						this.inputs.push(Object.assign({}, this.inputs[0]));
-					if (this.inputs.length == 1) break;
+					if (this.inputs.length == 1) throw ERROR("Unexpected behavior");
 				}
 				if (this.inputs.length >= 3) {
-					let mappedInputs = this.inputs.map((input) =>
-						input.command === "DIGIT" ? Number(input.value) : input.value
+					// OPERATE. Expected: [NUMBER OPERATOR NUMBER]
+					let mappedInputs = this.inputs.map(
+						(
+							input // CONVERTS INTEGER/FLOAT FROM STRING TO NUMBER
+						) =>
+							["INTEGER", "FLOAT"].includes(input.group)
+								? Number(input.value)
+								: input.value
 					);
 					let result = operate(mappedInputs);
+					let ipt;
 
 					if (isNaN(result) || !isFinite(result))
-						this.clear(new Input("ERROR", isNaN(result) ? "ERROR" : result));
-					else {
-						let isDecimal = !Number.isInteger(result);
-						let numbr = result;
+						// INFINITE OR ERROR
+						ipt = new Input("ERROR", isNaN(result) ? "ERROR" : result);
+					else if (result.toString().length > 9)
+						// NUMBER TOO BIG => ROUND
+						ipt = !Number.isInteger(result)
+							? new Input("FLOAT", round(result).toFixed(8))
+							: new Input("INTEGER", result.toExponential(2));
+					// NOTHING TO HANDLE
+					else
+						ipt = new Input(
+							!Number.isInteger(result) ? "FLOAT" : "INTEGER",
+							result.toString()
+						);
 
-						if (isDecimal && String(result).length > 9) {
-							if (String(result).length > 9) {
-								let pow = Math.min((result % 1).toString().length, 10);
-								numbr = (
-									Math.round(result * Math.pow(10, pow)) / Math.pow(10, pow)
-								).toPrecision(7);
-								alert("Result was rounded!");
-							}
-						}
-						this.clear(new Input("DIGIT", numbr.toString(), isDecimal));
-					}
+					// REPLACES WITH THE RESULT
+					this.clear(ipt);
 				}
+				// AFTER OPERATION PUSH NEXT OPERATOR
 				if (command === "OPERATOR") this.inputs.push(new Input(command, value));
 				break;
 			case "CLEAR":
 				this.clear();
 				break;
 			default:
-				console.log(command);
-				throw Error("UNKNOW COMMAND: " + command);
-				break;
+				throw Error("Unexpected  COMMAND: " + command);
 		}
 		this.updateDisplay();
 	}
-	static RESTRICTIONS({ command, isDecimal }) {
-		if (isDecimal) return new Restriction({ unallowed: ["DOT"] });
-		// allowed : ['CLEAR', 'DIGIT', 'OPERATOR', 'RESULT']
-		// else
-		switch (command) {
+	static RESTRICTIONS({ group }) {
+		switch (group) {
 			case "OPERATOR":
 				return new Restriction({
-					replace: ["OPERATOR"],
 					handle: {
-						DOT: new Input("DIGIT", "0.", true),
+						DOT: () => new Input("FLOAT", "0.", true),
+						OPERATOR: ({ inputs }, { value }) =>
+							this.inputs.splice(-1, 1, new Input(group, value)),
 					},
-					// allowed : ['DIGIT']
 				});
-				break;
 			case "ERROR":
 				return new Restriction({
 					unallowed: ["DIGIT", "DOT", "OPERATOR", "RESULT"],
 				});
+			case "FLOAT":
+				return new Restriction({
+					unallowed: ["DOT"],
+				});
 			case "CLEAR":
-			case "DIGIT":
+			case "INTEGER":
 			case "RESULT":
 				return new Restriction();
-				// allowed : ["CLEAR", "DIGIT", "DOT", "OPERATOR", "RESULT"]
-				break;
-
-				break;
 			default:
-				console.log(command);
 				throw Error("UNKNOW COMMAND");
-				break;
 		}
 	}
 }
@@ -244,7 +229,6 @@ function handleOperand(e) {
 		case "C":
 			c = new Command("CLEAR");
 			break;
-
 		default:
 			throw Error("UNKNOW COMMAND");
 			break;
