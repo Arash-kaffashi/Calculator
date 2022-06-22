@@ -102,12 +102,14 @@ class Formula {
 				break;
 			case "DIGIT": // ADD OPERAND OR UPDATES WITH THE NEW DIGIT
 				if (["INTEGER", "FLOAT"].includes(this.lastInput.group)) {
-					// REMOVES LAST AND ADD'S A DIGIT
+					// REMOVES LAST AND ADD'S THE DIGIT
 					this.replace(
 						-1,
 						new Input(
-							this.lastInput?.group ?? "INTEGER",
-							Number(this.lastInput.value + value).toString()
+							this.lastInput.group,
+							this.lastInput.group === "INTEGER"
+								? Number(this.lastInput.value + value).toString()
+								: this.lastInput.value + value
 						)
 					);
 				} else {
@@ -140,10 +142,14 @@ class Formula {
 						// INFINITE OR ERROR
 						ipt = new Input("ERROR", isNaN(result) ? "ERROR" : result);
 					else if (result.toString().length > 9)
-						// NUMBER TOO BIG => ROUND
-						ipt = !Number.isInteger(result)
-							? new Input("FLOAT", round(result).toFixed(8))
-							: new Input("INTEGER", result.toExponential(2));
+						if (!Number.isInteger(result)) {
+							// NUMBER TOO BIG => ROUND
+							let temp = round(result);
+							ipt =
+								temp.length > 9
+									? new Input("FLOAT", round(result).toFixed(8))
+									: new Input("FLOAT", temp.toString());
+						} else new Input("INTEGER", result.toExponential(2));
 					// NOTHING TO HANDLE
 					else
 						ipt = new Input(
@@ -171,8 +177,8 @@ class Formula {
 				return new Restriction({
 					handle: {
 						DOT: () => new Input("FLOAT", "0.", true),
-						OPERATOR: ({ inputs }, { value }) =>
-							this.inputs.splice(-1, 1, new Input(group, value)),
+						OPERATOR: (formula, { value }) =>
+							formula.replace(-1, new Input(group, value)),
 					},
 				});
 			case "ERROR":
@@ -194,19 +200,17 @@ class Formula {
 }
 
 let state = {
-	previousButton: null,
 	formula: new Formula(document.querySelector(".display")),
 };
 
-function handleOperand(e) {
-	let operator = e.target.textContent;
-	let c;
+function pushToFormula(operator) {
+	let CMD;
 	switch (operator) {
 		case "/":
 		case "*":
 		case "-":
 		case "+":
-			c = new Command("OPERATOR", operator);
+			CMD = new Command("OPERATOR", operator);
 			break;
 		case "1":
 		case "2":
@@ -218,25 +222,36 @@ function handleOperand(e) {
 		case "8":
 		case "9":
 		case "0":
-			c = new Command("DIGIT", operator);
+			CMD = new Command("DIGIT", operator);
 			break;
 		case ".":
-			c = new Command("DOT", operator);
+		case ",":
+			CMD = new Command("DOT", ".");
 			break;
+		case "Enter":
 		case "=":
-			c = new Command("RESULT");
+			CMD = new Command("RESULT");
 			break;
+		case "c":
 		case "C":
-			c = new Command("CLEAR");
+			CMD = new Command("CLEAR");
 			break;
 		default:
-			throw Error("UNKNOW COMMAND");
-			break;
+			console.log("No assigned:", operator);
+			return;
 	}
-	state.formula.push(c);
+	state.formula.push(CMD);
 	console.table(state.formula.inputs);
+}
+
+function handleOperand(e) {
+	pushToFormula(e.target.textContent);
 }
 
 Array.from(document.querySelectorAll(".button")).forEach((button) => {
 	button.addEventListener("click", handleOperand);
+});
+
+document.querySelector("body").addEventListener("keydown", (event) => {
+	pushToFormula(event.key);
 });
