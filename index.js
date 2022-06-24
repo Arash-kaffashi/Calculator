@@ -100,7 +100,7 @@ class Formula {
 			}
 			if (command in handle) {
 				// CUSTOM HANDLE OF INPUT
-				this.inputs.push(handle[command](this, CMD));
+				handle[command](this, CMD);
 				this.updateDisplay();
 				return;
 			}
