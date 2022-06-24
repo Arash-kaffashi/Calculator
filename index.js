@@ -67,6 +67,17 @@ class Formula {
 					throw Error("Unexpected behavior");
 			}
 		}, "");
+
+		let { unallowed } = Formula.RESTRICTIONS(this.lastInput);
+
+		COMMANDS.forEach((cmd) => {
+			let buttons = Array.from(
+				document.getElementsByClassName(cmd.toLowerCase())
+			);
+			if (unallowed.includes(cmd))
+				buttons.forEach((el) => el.classList.add("disabled"));
+			else buttons.forEach((el) => el.classList.remove("disabled"));
+		});
 	}
 	clear(value) {
 		this.inputs = [value ?? this.initialValue];
